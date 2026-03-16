@@ -24,8 +24,8 @@ export async function POST(req: Request) {
 
     // 1. Fetch YouTube Videos
     const videos = await fetchYouTubeVideos(moduleTitle);
-    const videoIds = videos.map(v => v.id);
-    const videoDescriptions = videos.map(v => v.description);
+    const videoIds = videos.map((v: { id: string, description: string }) => v.id);
+    const videoDescriptions = videos.map((v: { id: string, description: string }) => v.description);
 
     // 2. Generate Bridge Notes (even if no videos found to still provide context)
     const bridgeNotes = await generateBridgeNotes(moduleTitle, videoDescriptions);
@@ -45,6 +45,6 @@ export async function POST(req: Request) {
 
   } catch (error: unknown) {
     console.error('Module population error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to populate module' }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to populate module' }, { status: 500 });
   }
 }
