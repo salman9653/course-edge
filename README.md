@@ -2,7 +2,7 @@
 
 **Course Edge** is a state-of-the-art AI-powered learning platform designed to provide an immersive and interactive educational experience. Built with the latest web technologies, it offers a seamless interface for students to manage their courses, track progress, and engage with content in a modern, desktop-like environment.
 
-![Course Edge Preview](https://github.com/salman9653/course-edge/blob/main/public/preview.png?raw=true) *(Note: Add a real preview image path if available)*
+![Course Edge Preview](https://github.com/salman9653/course-edge/blob/main/public/preview.png?raw=true)
 
 ## ✨ Features
 
