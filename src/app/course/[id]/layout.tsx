@@ -71,7 +71,7 @@ export default async function CourseLayout({
         {/* Main Content Card */}
         <main className="flex-1 h-full bg-white dark:bg-[#1A1D24] rounded-2xl border border-slate-200/60 dark:border-[#2A2E35] overflow-hidden relative shadow-xs flex flex-col">
           <div className="absolute inset-0 z-0 bg-linear-to-br from-blue-50/30 via-transparent to-purple-50/30 dark:from-blue-900/10 dark:via-transparent dark:to-purple-900/10 pointer-events-none" />
-          <div className="relative z-10 w-full h-full overflow-y-auto">
+          <div id="course-scroll-container" className="relative z-10 w-full h-full overflow-y-auto">
             {children}
           </div>
         </main>

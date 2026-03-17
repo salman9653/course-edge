@@ -6,9 +6,19 @@ import { adminDb } from '@/lib/firebase/admin';
 import { FIREBASE_COLLECTIONS } from '@/lib/constants';
 import { fetchYouTubeVideos } from '@/lib/services/content-filler';
 
+interface FlashcardData {
+  front: string;
+  back: string;
+}
+
+interface SlideData {
+  title: string;
+  body: string;
+}
+
 interface ModuleData {
   title: string;
-  type: 'video' | 'infographics' | 'quiz';
+  type: 'video' | 'infographics' | 'quiz' | 'flashcard' | 'slideDeck';
   description: string;
   order_index: number;
   created_at: string;
@@ -20,6 +30,8 @@ interface ModuleData {
     question_count: number;
     context_summary: string;
   };
+  flashcard_data?: FlashcardData[];
+  slides?: SlideData[];
 }
 
 const courseSchema = z.object({
@@ -31,7 +43,7 @@ const courseSchema = z.object({
     order_index: z.number().describe('The order in which this phase should be learned (e.g., 1, 2, 3)'),
     modules: z.array(z.object({
       title: z.string().describe('The specific topic or concept for this module'),
-      type: z.enum(['video', 'infographics', 'quiz']).describe('The type of module. NOTE: Small quizzes must NEVER be the last module in a phase.'),
+      type: z.enum(['video', 'infographics', 'quiz', 'flashcard', 'slideDeck']).describe('The type of module. flashcard and slideDeck must appear just before the major quiz. Small quizzes must NEVER be the last module in a phase.'),
       description: z.string().describe('Briefly describe what this module covers'),
       infographic_markdown: z.string().optional().describe('Detailed content in markdown. REQUIRED for both infographics AND video modules based on their topic to provide text overview/explanation.'),
       search_query: z.string().optional().describe('The best youtube search query for this topic if type is video'),
@@ -39,7 +51,15 @@ const courseSchema = z.object({
         type: z.enum(['small', 'major']),
         question_count: z.number(),
         context_summary: z.string().describe('A summary of topics covered for quiz generation')
-      }).optional()
+      }).optional(),
+      flashcard_data: z.array(z.object({
+        front: z.string().describe('The question or concept on the front of the card'),
+        back: z.string().describe('The answer or explanation on the back of the card'),
+      })).optional().describe('REQUIRED for flashcard modules. Generate 8-12 cards covering the key phase concepts.'),
+      slides: z.array(z.object({
+        title: z.string().describe('Short, punchy slide title'),
+        body: z.string().describe('2-4 sentences explaining the concept clearly'),
+      })).optional().describe('REQUIRED for slideDeck modules. Generate exactly 10 slides summarising the phase content.'),
     }))
   }))
 });
@@ -61,11 +81,14 @@ Structure requirements:
 1. Each phase must have a mix of 'video' and 'infographics' modules.
 2. Infographics modules should fill gaps with detailed markdown content (including tables and lists).
 3. 'video' modules MUST also include a comprehensive 'infographic_markdown' that explains the core concepts and provides an overview of the topic.
-4. Every phase MUST end with exactly ONE 'major' quiz module (25-30 questions schema). This must be the final module in the phase array.
-5. Phases can have 'small' quizzes (10 questions schema). CRITICAL: Small quizzes MUST be placed in between content modules (e.g., after module 1 or 2). A small quiz CANNOT be the last module in a phase.
-6. For 'video' modules, provide a search_query for YouTube.
-6. For 'infographics' modules, provide comprehensive infographic_markdown.
-7. For 'quiz' modules, specify the type and context_summary (do not generate questions now).
+4. Every phase MUST end with exactly ONE 'major' quiz module (25-30 questions schema). This MUST be the very last module in the phase array.
+5. Phases can have 'small' quizzes (10 questions schema). CRITICAL: Small quizzes MUST be placed in between content modules. A small quiz CANNOT be the last module in a phase.
+6. CRITICAL: Every phase MUST include exactly ONE 'flashcard' module AND exactly ONE 'slideDeck' module placed in this exact order just before the final major quiz: [...content modules..., flashcard, slideDeck, major_quiz].
+7. For 'flashcard' modules: populate flashcard_data with 8-12 items (front = question/concept, back = answer/explanation) covering key phase concepts.
+8. For 'slideDeck' modules: populate slides with exactly 10 items (title + 2-4 sentence body) summarising the phase content in logical narrative order.
+9. For 'video' modules, provide a search_query for YouTube.
+10. For 'infographics' modules, provide comprehensive infographic_markdown.
+11. For 'quiz' modules, specify the type and context_summary (do not generate questions now).
 
 The goal is to eliminate tutorial hell and provide clear learning objectives.`;
 
@@ -133,6 +156,10 @@ The goal is to eliminate tutorial hell and provide clear learning objectives.`;
           }
         } else if (module.type === 'quiz') {
           moduleData.quiz_metadata = module.quiz_metadata;
+        } else if (module.type === 'flashcard') {
+          moduleData.flashcard_data = module.flashcard_data || [];
+        } else if (module.type === 'slideDeck') {
+          moduleData.slides = module.slides || [];
         }
 
         batch.set(moduleRef, moduleData);

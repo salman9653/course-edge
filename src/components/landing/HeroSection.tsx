@@ -53,7 +53,7 @@ export function HeroSection() {
           className="flex flex-col sm:flex-row items-center gap-6"
         >
           <Link href={user ? ROUTES.DASHBOARD : ROUTES.REGISTER} className="w-full sm:w-auto px-10 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-heading font-bold text-lg transition-all shadow-[0_20px_40px_-5px_rgba(59,130,246,0.4)] flex items-center justify-center gap-3 group active:scale-95">
-            Get Started <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            {user ? 'Go to dashboard' : 'Get Started'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Link>
           {!user && (
             <Link href="#features" className="w-full sm:w-auto px-10 py-5 bg-white dark:bg-[#1C1F26] text-slate-900 dark:text-white rounded-full font-heading font-bold text-lg hover:bg-slate-50 dark:hover:bg-white/5 transition-all flex items-center justify-center border border-slate-200 dark:border-white/10 active:scale-95">

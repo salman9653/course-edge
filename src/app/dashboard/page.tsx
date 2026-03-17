@@ -26,12 +26,18 @@ import { FIREBASE_COLLECTIONS } from '@/lib/constants';
 const MOCK_USER_ID = 'demo_user';
 
 const GENERATION_STEPS = [
-  "Analyzing topic...",
-  "Collecting resources...",
-  "Structuring phases...",
-  "Finding best videos...",
-  "Generating quizzes...",
-  "Finalizing roadmap..."
+  "Analyzing topic and scope...",
+  "Searching for relevant research...",
+  "Curating high-quality resources...",
+  "Identifying key learning concepts...",
+  "Structuring learning phases...",
+  "Finding best educational videos...",
+  "Generating practice exercises...",
+  "Designing interactive quizzes...",
+  "Synthesizing curriculum...",
+  "Optimizing knowledge flow...",
+  "Mapping module dependencies...",
+  "Finalizing your roadmap..."
 ];
 
 const BACKGROUND_IMAGES = [
@@ -50,7 +56,7 @@ function GeneratingAnimation() {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    // Cycle text slower (every 4.5s)
+    // Cycle text every 4.5s
     const textInterval = setInterval(() => {
       setStepIndex((prev) => (prev < GENERATION_STEPS.length - 1 ? prev + 1 : prev));
     }, 4500);

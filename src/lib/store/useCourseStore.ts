@@ -5,9 +5,11 @@ interface CourseState {
   activePhaseId: string | null;
   activeModuleId: string | null;
   unlockedPhases: string[];
+  isQuizInProgress: boolean;
   setCourseData: (courseId: string, phaseId: string, moduleId: string, unlockedPhases: string[]) => void;
   unlockPhase: (phaseId: string) => void;
   setActiveModule: (phaseId: string, moduleId: string) => void;
+  setQuizInProgress: (inProgress: boolean) => void;
 }
 
 export const useCourseStore = create<CourseState>((set) => ({
@@ -15,6 +17,7 @@ export const useCourseStore = create<CourseState>((set) => ({
   activePhaseId: null,
   activeModuleId: null,
   unlockedPhases: [],
+  isQuizInProgress: false,
   setCourseData: (courseId, phaseId, moduleId, unlockedPhases) => set({ 
     activeCourseId: courseId, 
     activePhaseId: phaseId, 
@@ -29,5 +32,6 @@ export const useCourseStore = create<CourseState>((set) => ({
   setActiveModule: (phaseId, moduleId) => set({
     activePhaseId: phaseId,
     activeModuleId: moduleId
-  })
+  }),
+  setQuizInProgress: (inProgress) => set({ isQuizInProgress: inProgress })
 }));

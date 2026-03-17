@@ -43,7 +43,26 @@ export async function POST(req: Request) {
     const prompt = `Based on the following topic summary for a "${type}" quiz, generate exactly ${question_count} challenging multiple-choice questions. 
 Context Summary: ${context_summary}
 
-Each question should have exactly 4 options. Return the index of the correct option (0-3).`;
+Each question should have exactly 4 options. Return the index of the correct option (0-3).
+
+CRITICAL MARKDOWN RULES (MANDATORY):
+1. **CODE BLOCKS**: Any code MUST be enclosed in triple backticks exactly in this format: \`\`\` --- \`\`\` (where --- is the language and code).
+2. **NO SINGLE BACKTICKS FOR BLOCKS**: Never use single backticks (\`) for multi-line code or functions.
+3. **SPACING**: You MUST put a blank line BEFORE and AFTER every triple backtick code block.
+4. **EXAMPLE**:
+   Consider this component:
+
+   \`\`\`jsx
+   function Greeting() {
+     return <h1>Hello</h1>;
+   }
+   \`\`\`
+
+   What will happen when...?
+
+5. **INLINE CODE**: Use single backticks only for tiny identifiers like \`props\`.
+
+Strictly follow these formatting rules so the UI can render beautiful code blocks.`;
 
     const { object } = await generateObject({
       model: google('gemini-2.5-flash'),

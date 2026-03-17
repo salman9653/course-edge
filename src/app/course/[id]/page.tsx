@@ -7,15 +7,17 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { VideoPlayer } from '@/components/VideoPlayer';
+import { FlashcardModule } from '@/components/FlashcardModule';
+import { SlideDeckModule } from '@/components/SlideDeckModule';
 import { Loader2, ArrowRight, BrainCircuit, WifiOff, CheckCircle2, Trophy, Target } from 'lucide-react';
-import { QuizModal } from '@/components/QuizModal';
+import { QuizModule } from '@/components/QuizModule';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { cn } from '@/lib/utils';
 
 interface ModuleData extends DocumentData {
   id: string;
   title: string;
-  type: 'video' | 'infographics' | 'quiz';
+  type: 'video' | 'infographics' | 'quiz' | 'flashcard' | 'slideDeck';
   description: string;
   order_index: number;
   content?: string; // infographic markdown
@@ -27,6 +29,8 @@ interface ModuleData extends DocumentData {
     question_count: number;
     context_summary: string;
   };
+  flashcard_data?: { front: string; back: string }[];
+  slides?: { title: string; body: string }[];
 }
 
 interface PhaseData {
@@ -82,7 +86,7 @@ function CourseProgressView({ courseId }: { courseId: string }) {
   const majorQuizzesPassed = phases.reduce((acc, p) => acc + p.modules.filter((m: ModuleData) => m.type === 'quiz' && (!m.quiz_metadata || m.quiz_metadata?.type === 'major') && m.is_completed).length, 0);
 
   return (
-    <div className="max-w-4xl mx-auto p-4 lg:p-8 pb-32">
+    <div className="w-full p-6 pb-32">
       <div className="mb-12 text-center md:text-left">
         <h1 className="text-4xl font-heading font-bold bg-linear-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent mb-4">
           Your Learning Journey
@@ -168,20 +172,33 @@ function CourseProgressView({ courseId }: { courseId: string }) {
 }
 
 export default function CoursePage() {
-  const { activeCourseId, activeModuleId, activePhaseId, setActiveModule } = useCourseStore();
+  const { activeCourseId, activeModuleId, activePhaseId, setActiveModule, isQuizInProgress } = useCourseStore();
   const [moduleData, setModuleData] = useState<ModuleData | null>(null);
   const [loading, setLoading] = useState(false);
   const [phaseModules, setPhaseModules] = useState<ModuleData[]>([]);
-  const [isQuizOpen, setIsQuizOpen] = useState(false);
+  const [phaseTitle, setPhaseTitle] = useState<string>('');
   const isOnline = useNetworkStatus();
+
+  // Scroll to top only once the new module's content is actually loaded and rendered
+  useEffect(() => {
+    if (!moduleData?.id) return;
+    const container = document.getElementById('course-scroll-container');
+    if (container) container.scrollTop = 0;
+  }, [moduleData?.id]);
 
   useEffect(() => {
     if (!activeCourseId || !activePhaseId || activeModuleId === 'course-progress') return;
     const fetchPhaseModules = async () => {
+      // Fetch modules
       const q = query(collection(db, 'courses', activeCourseId, 'phases', activePhaseId, 'modules'));
       const snap = await getDocs(q);
       const mods = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ModuleData[];
       setPhaseModules(mods.sort((a, b) => a.order_index - b.order_index));
+
+      // Fetch phase title
+      const phasesSnap = await getDocs(collection(db, 'courses', activeCourseId, 'phases'));
+      const currentPhase = phasesSnap.docs.find(d => d.id === activePhaseId);
+      if (currentPhase) setPhaseTitle(currentPhase.data().title);
     };
     fetchPhaseModules();
   }, [activeCourseId, activePhaseId, activeModuleId]);
@@ -246,8 +263,11 @@ export default function CoursePage() {
     }
   };
 
+  const isOtherModulesPending = phaseModules.filter(m => m.id !== activeModuleId).some(m => !m.is_completed);
+  const isAnyModulePending = isOtherModulesPending || !moduleData.is_completed;
+
   return (
-    <div className="max-w-4xl mx-auto p-4 lg:p-8 pb-32">
+    <div className="w-full p-6 pb-32">
       {!isOnline && (
         <div className="mb-6 p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-600 dark:text-orange-400 flex items-center gap-3 shadow-sm backdrop-blur-md">
           <WifiOff className="w-5 h-5 shrink-0" />
@@ -256,8 +276,10 @@ export default function CoursePage() {
       )}
 
       <div className="mb-8">
-        <h1 className="text-3xl font-heading font-bold bg-linear-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent mb-6">
-          {moduleData.title}
+        <h1 className="text-3xl font-heading font-bold bg-linear-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent mb-6 text-center">
+          {moduleData.type === 'quiz' && moduleData.quiz_metadata?.type === 'major' 
+            ? `Major Quiz: ${phaseTitle.split(':')[0]}` 
+            : moduleData.title}
         </h1>
         
         {moduleData.type === 'video' && (
@@ -292,31 +314,25 @@ export default function CoursePage() {
         )}
 
         {moduleData.type === 'quiz' && (
-          <div className="flex flex-col items-center justify-center py-12 gap-6">
-            <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-3xl flex items-center justify-center text-blue-600 dark:text-blue-400">
-              <BrainCircuit className="w-10 h-10" />
-            </div>
-            <div className="text-center">
-              <h2 className="text-2xl font-bold mb-2">Knowledge Check</h2>
-              <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                Time to test what you&apos;ve learned in this phase. Passing this quiz unlocks the next phase.
-              </p>
-            </div>
-          </div>
+          <QuizModule 
+            courseId={activeCourseId || ''} 
+            phaseId={activePhaseId || ''} 
+            moduleId={activeModuleId || ''} 
+            onNextModule={nextModuleId ? () => setActiveModule(activePhaseId || '', nextModuleId) : undefined}
+          />
+        )}
+
+        {moduleData.type === 'flashcard' && (
+          <FlashcardModule cards={moduleData.flashcard_data && moduleData.flashcard_data.length > 0 ? moduleData.flashcard_data : [{ front: 'No flashcards available', back: 'Please regenerate this module.' }]} />
+        )}
+
+        {moduleData.type === 'slideDeck' && (
+          <SlideDeckModule slides={moduleData.slides && moduleData.slides.length > 0 ? moduleData.slides : [{ title: 'No slides available', body: 'Please regenerate this module.' }]} />
         )}
       </div>
 
-      <div className="flex justify-end mt-12 mb-20">
-        {moduleData.type === 'quiz' ? (
-          <button 
-            onClick={() => setIsQuizOpen(true)}
-            className="flex items-center gap-2 px-8 py-4 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl font-semibold shadow-lg shadow-blue-500/30 transition-all hover:scale-105"
-          >
-            <BrainCircuit className="w-5 h-5" />
-            Start Quiz
-            <ArrowRight className="w-5 h-5 ml-2" />
-          </button>
-        ) : (
+      <div className="flex flex-col items-end gap-6 mt-12">
+        {moduleData.type !== 'quiz' && (
           <button 
             onClick={handleCompleteAndNext}
             className="flex items-center gap-2 px-8 py-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-2xl font-semibold shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 transition-all hover:scale-105 border border-slate-200 dark:border-slate-700 disabled:opacity-50"
@@ -328,13 +344,23 @@ export default function CoursePage() {
         )}
       </div>
 
-      <QuizModal 
-        courseId={activeCourseId || ''}
-        phaseId={activePhaseId || ''} 
-        moduleId={activeModuleId || ''}
-        isOpen={isQuizOpen} 
-        onClose={() => setIsQuizOpen(false)} 
-      />
+      {isLastModule && isAnyModulePending && !isQuizInProgress && (
+        <div className={cn(
+          "w-full mt-12 mb-20 p-6 rounded-3xl border text-center transition-colors duration-500",
+          isOtherModulesPending 
+            ? "bg-amber-50 dark:bg-amber-500/5 border-amber-200 dark:border-amber-500/20" 
+            : "bg-emerald-50 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20"
+        )}>
+          <p className={cn(
+            "font-bold text-lg",
+            isOtherModulesPending ? "text-amber-800 dark:text-amber-400" : "text-emerald-800 dark:text-emerald-400"
+          )}>
+            {isOtherModulesPending 
+              ? "Modules Pending: Complete every module and pass all quizzes to unlock the next phase!"
+              : "Ready to Advance: Complete this major quiz to unlock the next phase!"}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
