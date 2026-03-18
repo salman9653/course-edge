@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase/client';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   BrainCircuit, 
@@ -18,7 +18,8 @@ import {
   ChevronRight,
   Trash2,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Pin
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -171,21 +172,18 @@ interface Course {
   brand?: string;
   brandIcon?: string;
   bgImage?: string;
+  isPinned?: boolean;
 }
 
-// 10 Dummy Featured Courses
-const MOCK_FEATURED_ALL: Course[] = [
-  { id: 'feat-1', title: 'Advanced Neural Architectures & LLMs', description: 'Deep dive into transformers', level: 'Advanced', created_at: '2026-03-10T00:00:00Z', source_count: 57, brand: 'AI Research Lab', bgImage: '/course_background_1.png' },
-  { id: 'feat-2', title: 'Visual Design Systems for High-End Apps', description: 'Mastering modern UI', level: 'Intermediate', created_at: '2026-03-12T00:00:00Z', source_count: 24, brand: 'Design Weekly', bgImage: '/course_background_2.png' },
-  { id: 'feat-3', title: 'The Future of Sustainable Green Tech', description: 'Eco-friendly computing', level: 'Beginner', created_at: '2026-03-14T00:00:00Z', source_count: 15, brand: 'Green Earth Foundation', bgImage: '/course_background_3.png' },
-  { id: 'feat-4', title: 'Quantum Computing Fundamentals', description: 'Qubits and algorithms', level: 'Advanced', created_at: '2026-02-28T00:00:00Z', source_count: 42, brand: 'Physics Daily', bgImage: '/course_background_1.png' },
-  { id: 'feat-5', title: 'Modern Real-time Data Streaming', description: 'Kafka and beyond', level: 'Intermediate', created_at: '2026-03-01T00:00:00Z', source_count: 36, brand: 'Cloud Master', bgImage: '/course_background_2.png' },
-  { id: 'feat-6', title: 'Cybersecurity for AI Applications', description: 'Securing the future', level: 'Advanced', created_at: '2026-03-05T00:00:00Z', source_count: 19, brand: 'SecNet', bgImage: '/course_background_3.png' },
-  { id: 'feat-7', title: 'Distributed Systems at Scale', description: 'Architecting for millions', level: 'Advanced', created_at: '2026-03-08T00:00:00Z', source_count: 65, brand: 'Open Source Dev', bgImage: '/course_background_1.png' },
-  { id: 'feat-8', title: 'User Psychology in Product Growth', description: 'Behaviors and hooks', level: 'Beginner', created_at: '2026-03-09T00:00:00Z', source_count: 12, brand: 'Growth Hackers', bgImage: '/course_background_2.png' },
-  { id: 'feat-9', title: 'Blockchain & Web3 Architecture', description: 'Decentralized future', level: 'Intermediate', created_at: '2026-03-11T00:00:00Z', source_count: 28, brand: 'NextWeb', bgImage: '/course_background_3.png' },
-  { id: 'feat-10', title: 'Bio-Informatics & Genomics with AI', description: 'Decoding life', level: 'Advanced', created_at: '2026-03-13T00:00:00Z', source_count: 89, brand: 'BioTech News', bgImage: '/course_background_1.png' },
+const PLACEHOLDER_EXAMPLES = [
+  "Advanced Data Structures in Python",
+  "Introduction to Machine Learning",
+  "Creative Writing for Beginners",
+  "Space Exploration History",
+  "Financial Independence Strategies",
+  "Mastering UI Design Systems"
 ];
+
 
 export default function DashboardPage() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -197,13 +195,24 @@ export default function DashboardPage() {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   
-  // Generation State
   const [topic, setTopic] = useState('');
   const [level, setLevel] = useState('Beginner');
   const [language, setLanguage] = useState('English');
+  const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isModalOpen && !generating && !generationError) {
+      interval = setInterval(() => {
+        setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDER_EXAMPLES.length);
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [isModalOpen, generating, generationError]);
 
   // Auth and Navigation
   const { user, loading: authLoading } = useAuth();
@@ -316,11 +325,30 @@ export default function DashboardPage() {
     }
   };
 
-  const filteredCourses = courses.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()));
-  const filteredFeatured = MOCK_FEATURED_ALL.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  const handleTogglePin = async (id: string, currentPinStatus: boolean, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Optimistic update
+    setCourses(courses.map(c => c.id === id ? { ...c, isPinned: !currentPinStatus } : c));
+    setActiveMenuId(null);
+    
+    try {
+      const courseRef = doc(db, FIREBASE_COLLECTIONS.COURSES, id);
+      await updateDoc(courseRef, { isPinned: !currentPinStatus });
+    } catch (error) {
+      console.error("Error toggling pin status:", error);
+      // Revert optimistic update on error
+      setCourses(courses.map(c => c.id === id ? { ...c, isPinned: currentPinStatus } : c));
+      alert("Failed to update pin status");
+    }
+  };
 
-  // Determine what featured courses to display
-  const displayFeatured = activeTab === 'All' ? filteredFeatured.slice(0, 4) : filteredFeatured;
+  const filteredCourses = courses.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredPinned = courses.filter(c => c.isPinned && c.title.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  // Determine what pinned courses to display
+  const displayPinned = activeTab === 'All' ? filteredPinned.slice(0, 4) : filteredPinned;
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] dark:bg-[#0D0F12] text-slate-900 dark:text-[#E8EAED] transition-all pt-[80px]">
@@ -331,7 +359,7 @@ export default function DashboardPage() {
         <div className="max-w-[1400px] mx-auto px-6 py-6 flex items-center justify-between gap-8">
            {/* Tabs Aligned to Logo */}
            <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-full border border-slate-200/50 dark:border-white/5 flex-shrink-0">
-             {['All', 'Featured courses'].map((tab) => (
+             {['All', 'Pinned'].map((tab) => (
                <button
                  key={tab}
                  onClick={() => setActiveTab(tab)}
@@ -373,29 +401,183 @@ export default function DashboardPage() {
       </div>
 
       <main className="max-w-[1400px] mx-auto px-6 py-12 space-y-20 pb-48">
-        
-        {/* Featured Section */}
+
+        {/* Search Results — replaces everything when search is active */}
+        {searchQuery.trim() !== '' ? (
+          <section>
+            <div className="flex items-center justify-between mb-10">
+              <h2 className="text-2xl font-heading font-medium tracking-tight text-slate-900 dark:text-[#E8EAED]">
+                Search results <span className="text-slate-400 dark:text-slate-500 font-normal text-lg ml-2">for &ldquo;{searchQuery}&rdquo;</span>
+              </h2>
+              {filteredCourses.length > 0 && (
+                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">{filteredCourses.length} found</span>
+              )}
+            </div>
+            {filteredCourses.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="w-20 h-20 rounded-3xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 mb-6">
+                  <Search className="w-9 h-9" />
+                </div>
+                <p className="text-slate-500 dark:text-slate-400 font-medium text-lg">No courses match &ldquo;{searchQuery}&rdquo;</p>
+                <p className="text-slate-400 dark:text-slate-600 text-sm mt-2">Try a different keyword</p>
+              </div>
+            ) : viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                {filteredCourses.map((course) => (
+                  <motion.div key={course.id} whileHover={{ y: -8 }} transition={{ type: 'spring', stiffness: 300 }}>
+                    <Link href={`/course/${course.id}`}>
+                      <div className="group relative aspect-square rounded-[2.5rem] overflow-hidden cursor-pointer shadow-xl dark:shadow-black/50 border border-transparent hover:border-blue-500/50 transition-all duration-500">
+                        <Image src={getRandomBackground(course.id)} alt={course.title} fill unoptimized className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
+                        <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/30 to-black/10 transition-opacity duration-500 group-hover:opacity-80" />
+                        <div className="absolute top-6 left-6 flex items-center justify-between w-[calc(100%-48px)]">
+                          <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-2xl border border-white/20 flex items-center justify-center overflow-hidden shadow-xl">
+                            <BrainCircuit className="w-6 h-6 text-white" />
+                          </div>
+                          <div className="relative">
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveMenuId(activeMenuId === `search-${course.id}` ? null : `search-${course.id}`); }}
+                              className="p-2.5 text-white/50 hover:text-white transition-all bg-white/10 backdrop-blur-md rounded-xl border border-white/10"
+                            >
+                              <MoreVertical className="w-5 h-5" />
+                            </button>
+                            <AnimatePresence>
+                              {activeMenuId === `search-${course.id}` && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                                  className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden z-20"
+                                >
+                                  <button onClick={(e) => handleTogglePin(course.id, course.isPinned || false, e)} className="w-full px-5 py-4 flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-sm font-bold uppercase tracking-widest border-b border-slate-200 dark:border-white/5">
+                                    <Pin className="w-4 h-4" /> {course.isPinned ? 'Unpin' : 'Pin course'}
+                                  </button>
+                                  <button onClick={(e) => handleDeleteCourse(course.id, e)} className="w-full px-5 py-4 flex items-center gap-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors text-sm font-bold uppercase tracking-widest">
+                                    <Trash2 className="w-4 h-4" /> Delete
+                                  </button>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+                        <div className="absolute bottom-8 left-8 right-8 text-white">
+                          <h3 className="text-2xl font-heading font-bold leading-[1.2] mb-4 uppercase tracking-tight line-clamp-3 group-hover:text-blue-400 transition-colors">{course.title}</h3>
+                          <div className="flex flex-col text-[11px] font-bold uppercase tracking-[0.2em] text-slate-300">
+                            <span>{mounted ? new Date(course.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
+                            <div className="flex items-center gap-2 mt-2">
+                              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+                              <span>{course.source_count} modules</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <div className="w-full overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-500 border-b border-slate-200/60 dark:border-[#202124]">
+                      <th className="pb-4 pt-2 font-bold w-[45%]">Title</th>
+                      <th className="pb-4 pt-2 font-bold">Modules</th>
+                      <th className="pb-4 pt-2 font-bold">Created</th>
+                      <th className="pb-4 pt-2 font-bold text-right w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-[#202124]">
+                    {filteredCourses.map((course) => (
+                      <tr key={course.id} className="group hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer" onClick={() => router.push(`/course/${course.id}`)}>
+                        <td className="py-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                              <BrainCircuit className="w-4 h-4" />
+                            </div>
+                            <span className="text-sm font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors tracking-tight">{course.title}</span>
+                          </div>
+                        </td>
+                        <td className="py-4 text-sm text-slate-500 dark:text-slate-400 font-medium">{course.source_count} Modules</td>
+                        <td className="py-4 text-sm text-slate-500 dark:text-slate-400 font-medium">{mounted ? new Date(course.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</td>
+                        <td className="py-4 text-right relative">
+                          <button onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === `search-list-${course.id}` ? null : `search-list-${course.id}`); }} className="p-1.5 text-slate-300 hover:text-slate-600 dark:hover:text-white transition-all">
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          <AnimatePresence>
+                            {activeMenuId === `search-list-${course.id}` && (
+                              <motion.div initial={{ opacity: 0, scale: 0.9, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 10 }} className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden z-20 text-left">
+                                <button onClick={(e) => handleTogglePin(course.id, course.isPinned || false, e)} className="w-full px-5 py-4 flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-sm font-bold uppercase tracking-widest border-b border-slate-200 dark:border-white/5">
+                                  <Pin className="w-4 h-4" /> {course.isPinned ? 'Unpin' : 'Pin course'}
+                                </button>
+                                <button onClick={(e) => handleDeleteCourse(course.id, e)} className="w-full px-5 py-4 flex items-center gap-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors text-sm font-bold uppercase tracking-widest">
+                                  <Trash2 className="w-4 h-4" /> Delete
+                                </button>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        ) : (
+        <>
+        {/* Pinned Section */}
+        {(activeTab === 'Pinned' || (activeTab === 'All' && displayPinned.length > 0)) && (
         <section>
           <div className="flex items-center justify-between mb-10">
             <h2 className="text-2xl font-heading font-medium tracking-tight text-slate-900 dark:text-[#E8EAED]">
-              {activeTab === 'All' ? 'Featured courses' : 'Explore Featured Journey Library'}
+              {activeTab === 'All' ? 'Pinned courses' : 'Your Pinned Courses'}
             </h2>
           </div>
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {displayFeatured.map((course) => (
+              {displayPinned.map((course) => (
                 <motion.div key={course.id} whileHover={{ y: -8 }} transition={{ type: 'spring', stiffness: 300 }}>
                   <Link href={`/course/${course.id}`}>
                     <div className="group relative aspect-3/4 rounded-[2.5rem] overflow-hidden cursor-pointer shadow-xl dark:shadow-black/50 border border-transparent hover:border-blue-500/50 transition-all duration-500">
                       <Image src={getRandomBackground(course.id)} alt={course.title} fill className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
                       <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/30 to-black/10 transition-opacity duration-500 group-hover:opacity-80" />
-                      <div className="absolute top-6 left-6 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-2xl border border-white/20 flex items-center justify-center text-white shadow-xl">
-                          <BrainCircuit className="w-5 h-5" />
+                      <div className="absolute top-6 left-6 flex items-center justify-between w-[calc(100%-48px)]">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-2xl border border-white/20 flex items-center justify-center text-white shadow-xl">
+                            <BrainCircuit className="w-5 h-5" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[11px] font-bold text-white uppercase tracking-widest opacity-80">{course.brand}</span>
+                            <h4 className="text-xs font-bold text-white tracking-wide">{course.level} Journey</h4>
+                          </div>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-[11px] font-bold text-white uppercase tracking-widest opacity-80">{course.brand}</span>
-                          <h4 className="text-xs font-bold text-white tracking-wide">{course.level} Journey</h4>
+                        <div className="relative">
+                          <button 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setActiveMenuId(activeMenuId === `pinned-${course.id}` ? null : `pinned-${course.id}`);
+                            }}
+                            className="p-2.5 text-white/50 hover:text-white transition-all bg-white/10 backdrop-blur-md rounded-xl border border-white/10"
+                          >
+                            <MoreVertical className="w-5 h-5" />
+                          </button>
+                          <AnimatePresence>
+                            {activeMenuId === `pinned-${course.id}` && (
+                              <motion.div 
+                                initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                                className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden z-20"
+                              >
+                                <button 
+                                  onClick={(e) => handleTogglePin(course.id, course.isPinned || false, e)}
+                                  className="w-full px-5 py-4 flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-sm font-bold uppercase tracking-widest"
+                                >
+                                  <Pin className="w-4 h-4" /> {course.isPinned ? 'Unpin' : 'Pin course'}
+                                </button>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                       </div>
                       <div className="absolute bottom-8 left-8 right-8 text-white">
@@ -421,11 +603,11 @@ export default function DashboardPage() {
                     <th className="pb-4 pt-2 font-bold">Modules</th>
                     <th className="pb-4 pt-2 font-bold">Created</th>
                     <th className="pb-4 pt-2 font-bold text-center w-10"></th>
-                    <th className="pb-4 pt-2 font-bold">Role</th>
+                    <th className="pb-4 pt-2 font-bold text-right w-10"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#202124]">
-                  {displayFeatured.map((course) => (
+                  {displayPinned.map((course) => (
                     <tr key={course.id} className="group hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer" onClick={() => router.push(`/course/${course.id}`)}>
                       <td className="py-4">
                         <div className="flex items-center gap-4">
@@ -440,9 +622,36 @@ export default function DashboardPage() {
                       <td className="py-4 text-sm text-slate-500 dark:text-slate-400 font-medium">{course.source_count} Modules</td>
                       <td className="py-4 text-sm text-slate-500 dark:text-slate-400 font-medium">{mounted ? new Date(course.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</td>
                       <td className="py-4 text-center">
-                         <Globe className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity mx-auto" />
+                         <Pin className="w-4 h-4 text-blue-500 mx-auto" />
                       </td>
-                      <td className="py-4 text-sm text-slate-500 dark:text-slate-400 font-medium tracking-wide uppercase italic text-[10px]">Reader</td>
+                      <td className="py-4 text-right relative">
+                         <button 
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             setActiveMenuId(activeMenuId === `pinned-list-${course.id}` ? null : `pinned-list-${course.id}`);
+                           }}
+                           className="p-1.5 text-slate-300 hover:text-slate-600 dark:hover:text-white transition-all"
+                         >
+                           <MoreVertical className="w-4 h-4" />
+                         </button>
+                         <AnimatePresence>
+                           {activeMenuId === `pinned-list-${course.id}` && (
+                             <motion.div 
+                               initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                               animate={{ opacity: 1, scale: 1, y: 0 }}
+                               exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                               className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden z-20 text-left"
+                             >
+                                <button 
+                                  onClick={(e) => handleTogglePin(course.id, course.isPinned || false, e)}
+                                  className="w-full px-5 py-4 flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-sm font-bold uppercase tracking-widest"
+                                >
+                                  <Pin className="w-4 h-4" /> {course.isPinned ? 'Unpin' : 'Pin course'}
+                                </button>
+                             </motion.div>
+                           )}
+                         </AnimatePresence>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -450,10 +659,10 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeTab === 'All' && filteredFeatured.length > 4 && (
+          {activeTab === 'All' && filteredPinned.length > 4 && (
             <div className="flex justify-end mt-8">
                <button 
-                onClick={() => setActiveTab('Featured courses')}
+                onClick={() => setActiveTab('Pinned')}
                 className="flex items-center gap-2 px-5 py-2 rounded-full bg-slate-200 dark:bg-[#1C1F26] border border-slate-300/50 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-[#252a33] transition-all text-[11px] font-bold uppercase tracking-wider shadow-sm"
                >
                  See all <ChevronRight className="w-3.5 h-3.5 opacity-70" />
@@ -461,6 +670,7 @@ export default function DashboardPage() {
             </div>
           )}
         </section>
+        )}
 
         {/* Recent Courses Section (Hidden in Featured Tab) */}
         {activeTab === 'All' && (
@@ -490,14 +700,14 @@ export default function DashboardPage() {
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  setActiveMenuId(activeMenuId === course.id ? null : course.id);
+                                  setActiveMenuId(activeMenuId === `recent-${course.id}` ? null : `recent-${course.id}`);
                                 }}
                                 className="p-2.5 text-white/50 hover:text-white transition-all bg-white/10 backdrop-blur-md rounded-xl border border-white/10"
                               >
                                 <MoreVertical className="w-5 h-5" />
                               </button>
                               <AnimatePresence>
-                                {activeMenuId === course.id && (
+                                {activeMenuId === `recent-${course.id}` && (
                                   <motion.div 
                                     initial={{ opacity: 0, scale: 0.9, y: 10 }}
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -505,7 +715,13 @@ export default function DashboardPage() {
                                     className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden z-20"
                                   >
                                     <button 
-                                      onClick={(e) => handleDeleteCourse(course.id, e)}
+                                      onClick={(e) => handleTogglePin(course.id, course.isPinned || false, e)}
+                                      className="w-full px-5 py-4 flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-sm font-bold uppercase tracking-widest border-b border-slate-200 dark:border-white/5"
+                                    >
+                                      <Pin className="w-4 h-4" /> {course.isPinned ? 'Unpin' : 'Pin course'}
+                                    </button>
+                                   <button 
+                                     onClick={(e) => handleDeleteCourse(course.id, e)}
                                       className="w-full px-5 py-4 flex items-center gap-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors text-sm font-bold uppercase tracking-widest"
                                     >
                                       <Trash2 className="w-4 h-4" /> Delete
@@ -560,20 +776,26 @@ export default function DashboardPage() {
                            <button 
                              onClick={(e) => {
                                e.stopPropagation();
-                               setActiveMenuId(activeMenuId === course.id ? null : course.id);
+                               setActiveMenuId(activeMenuId === `recent-list-${course.id}` ? null : `recent-list-${course.id}`);
                              }}
                              className="p-1.5 text-slate-300 hover:text-slate-600 dark:hover:text-white transition-all"
                            >
                              <MoreVertical className="w-4 h-4" />
                            </button>
                            <AnimatePresence>
-                             {activeMenuId === course.id && (
+                             {activeMenuId === `recent-list-${course.id}` && (
                                <motion.div 
                                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
                                  animate={{ opacity: 1, scale: 1, y: 0 }}
                                  exit={{ opacity: 0, scale: 0.9, y: 10 }}
                                  className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden z-20"
                                >
+                                 <button 
+                                   onClick={(e) => handleTogglePin(course.id, course.isPinned || false, e)}
+                                   className="w-full px-5 py-4 flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-sm font-bold uppercase tracking-widest border-b border-slate-200 dark:border-white/5"
+                                 >
+                                   <Pin className="w-4 h-4" /> {course.isPinned ? 'Unpin' : 'Pin course'}
+                                 </button>
                                  <button 
                                    onClick={(e) => handleDeleteCourse(course.id, e)}
                                    className="w-full px-5 py-4 flex items-center gap-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors text-sm font-bold uppercase tracking-widest"
@@ -603,6 +825,8 @@ export default function DashboardPage() {
             )}
           </section>
         )}
+        </>
+        )}
       </main>
 
       {/* Modal */}
@@ -621,8 +845,7 @@ export default function DashboardPage() {
               ) : (
                 <>
                   <div className="mb-12">
-                    <div className="w-16 h-16 bg-blue-600 rounded-[1.2rem] flex items-center justify-center mb-10 shadow-2xl shadow-blue-500/40"><Plus className="w-8 h-8 text-white" /></div>
-                    <h2 className="text-4xl font-heading font-bold mb-4 tracking-tight text-slate-900 dark:text-white">Architect New Course</h2>
+                    <h2 className="text-4xl font-heading font-bold mb-4 tracking-tight text-slate-900 dark:text-white mt-4">Architect New Course</h2>
                     <p className="text-slate-500 dark:text-slate-400 font-medium text-lg">Define a topic and let AI curate your personalized learning roadmap.</p>
                   </div>
                   <form onSubmit={handleGenerate} className="space-y-10">
@@ -630,7 +853,9 @@ export default function DashboardPage() {
                       <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 tracking-widest uppercase italic ml-1 opacity-70">Topic</label>
                       <div className="relative group">
                         <Sparkles className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-blue-500 transition-transform group-focus-within:scale-125" />
-                        <input type="text" required value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Next.js for Flutter Developers" className="w-full pl-16 pr-8 py-6 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[2rem] focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all text-xl font-medium" />
+                        <AnimatePresence mode="wait">
+                          <input type="text" required value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={`e.g. ${PLACEHOLDER_EXAMPLES[placeholderIndex]}`} className="w-full pl-16 pr-8 py-6 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[2rem] focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all text-xl font-medium" />
+                        </AnimatePresence>
                       </div>
                     </div>
                     <div className="space-y-4">
@@ -641,15 +866,41 @@ export default function DashboardPage() {
                         ))}
                       </div>
                     </div>
-                    <div className="space-y-4">
+                    <div className="space-y-4 relative">
                       <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 tracking-widest uppercase italic ml-1 opacity-70">Language</label>
-                      <select 
-                        value={language} 
-                        onChange={(e) => setLanguage(e.target.value)}
-                        className="w-full px-6 py-5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all text-lg font-medium appearance-none"
-                      >
-                        <option value="English">English</option>
-                      </select>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)}
+                          className={`w-full px-6 py-5 bg-slate-50 dark:bg-white/5 border ${isLanguageDropdownOpen ? 'border-blue-500 ring-4 ring-blue-500/10' : 'border-slate-200 dark:border-white/10'} rounded-2xl outline-none transition-all text-lg font-medium text-left flex items-center justify-between`}
+                        >
+                          <span className="text-slate-900 dark:text-slate-200">{language}</span>
+                          <ChevronRight className={`w-5 h-5 text-slate-400 transition-transform ${isLanguageDropdownOpen ? 'rotate-90' : ''}`} />
+                        </button>
+                        
+                        <AnimatePresence>
+                          {isLanguageDropdownOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              className="absolute top-full left-0 right-0 mt-2 py-2 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10 z-50 overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLanguage('English');
+                                  setIsLanguageDropdownOpen(false);
+                                }}
+                                className={`w-full px-6 py-3 text-left transition-colors ${language === 'English' ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300' : 'hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300'} font-medium`}
+                              >
+                                English
+                              </button>
+                              {/* Add more languages here as needed in the future */}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
                     <div className="pt-6">
                       <button type="submit" disabled={generating || !topic} className="w-full py-6 bg-blue-600 hover:bg-blue-700 text-white rounded-[2rem] font-heading font-bold text-xl transition-all shadow-[0_20px_40px_-5px_rgba(59,130,246,0.5)] flex items-center justify-center gap-4 disabled:opacity-50 active:scale-[0.98]">
