@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase/client';
-import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   BrainCircuit, 
@@ -17,13 +17,15 @@ import {
   X,
   ChevronRight,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { FIREBASE_COLLECTIONS } from '@/lib/constants';
+import { useAuth } from '@/hooks/useAuth';
 
-const MOCK_USER_ID = 'demo_user';
+// const MOCK_USER_ID = 'demo_user';
 
 const GENERATION_STEPS = [
   "Analyzing topic and scope...",
@@ -125,6 +127,40 @@ function GeneratingAnimation() {
   );
 }
 
+function GenerationErrorView({ onRetry, onClose }: { onRetry: () => void; onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="flex flex-col items-center justify-center py-8 text-center"
+    >
+      <div className="w-20 h-20 bg-red-50 dark:bg-red-500/10 rounded-3xl flex items-center justify-center text-red-500 mb-6 shadow-inner">
+        <AlertTriangle className="w-10 h-10" />
+      </div>
+      <h3 className="text-2xl font-heading font-bold text-slate-900 dark:text-white mb-3">
+        Unable to Create Course
+      </h3>
+      <p className="text-slate-500 dark:text-slate-400 text-base max-w-sm mb-8 leading-relaxed">
+        Something went wrong while generating your course. This can happen due to a network timeout or AI service issue. Please try again.
+      </p>
+      <div className="flex gap-4 w-full max-w-xs">
+        <button
+          onClick={onClose}
+          className="flex-1 py-3.5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 rounded-2xl font-bold hover:bg-slate-200 dark:hover:bg-white/10 transition-all text-sm"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onRetry}
+          className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 text-sm"
+        >
+          <RefreshCw className="w-4 h-4" /> Try Again
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 interface Course {
   id: string;
   title: string;
@@ -166,7 +202,11 @@ export default function DashboardPage() {
   const [level, setLevel] = useState('Beginner');
   const [language, setLanguage] = useState('English');
   const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  // Auth and Navigation
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -175,8 +215,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchCourses = async () => {
+      if (!user) return; // Wait for user to be available
+
       try {
-        const q = query(collection(db, FIREBASE_COLLECTIONS.COURSES), where('user_id', '==', MOCK_USER_ID));
+        const q = query(collection(db, FIREBASE_COLLECTIONS.COURSES), where('user_id', '==', user.uid));
         const snapshot = await getDocs(q);
         const fetched = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -191,27 +233,53 @@ export default function DashboardPage() {
         setLoading(false);
       }
     };
-    fetchCourses();
-  }, []);
+
+    if (!authLoading) {
+      if (user) {
+        fetchCourses();
+      } else {
+        setLoading(false);
+      }
+    }
+  }, [user, authLoading]);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!topic) return;
+    if (!topic || !user) return;
     setGenerating(true);
+    setGenerationError(false);
     try {
       const res = await fetch('/api/generate-course', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, level, language, userId: MOCK_USER_ID }),
+        body: JSON.stringify({ topic, level, language, userId: user.uid }),
       });
       const data = await res.json();
-      if (data.success) router.push(`/course/${data.courseId}`);
-      else alert(data.error || 'Failed to generate course');
+      if (data.success) {
+        router.push(`/course/${data.courseId}`);
+      } else {
+        console.error('Course generation failed:', data.error);
+        setGenerationError(true);
+        setGenerating(false);
+      }
     } catch (error) {
       console.error('Generation failed:', error);
-      alert('Something went wrong. Please try again.');
-    } finally {
+      setGenerationError(true);
       setGenerating(false);
+    }
+  };
+
+  const handleRetryGenerate = () => {
+    setGenerationError(false);
+    // Re-submit the form programmatically using the existing state
+    const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+    handleGenerate(fakeEvent);
+  };
+
+  const handleCloseModal = () => {
+    if (!generating) {
+      setIsModalOpen(false);
+      setGenerationError(false);
     }
   };
 
@@ -227,13 +295,24 @@ export default function DashboardPage() {
 
   const confirmDelete = async () => {
     if (!courseToDelete) return;
+
     try {
-      await deleteDoc(doc(db, FIREBASE_COLLECTIONS.COURSES, courseToDelete.id));
-      setCourses(courses.filter(c => c.id !== courseToDelete.id));
-      setCourseToDelete(null);
+      const res = await fetch('/api/delete-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId: courseToDelete.id }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setCourses(courses.filter(c => c.id !== courseToDelete.id));
+        setCourseToDelete(null);
+      } else {
+        throw new Error(data.error || 'Failed to delete course');
+      }
     } catch (error) {
       console.error("Error deleting course:", error);
-      alert("Failed to delete course");
+      alert("Failed to delete course: " + (error instanceof Error ? error.message : "Internal error"));
     }
   };
 
@@ -530,12 +609,15 @@ export default function DashboardPage() {
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={handleCloseModal} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }} className="relative w-full max-w-2xl bg-white dark:bg-[#1C1F26] rounded-[3.5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] border border-slate-200/60 dark:border-white/5 p-16">
-              {!generating && <button onClick={() => setIsModalOpen(false)} className="absolute top-10 right-10 p-3 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all hover:rotate-90 bg-slate-100 dark:bg-white/5 rounded-2xl"><X className="w-6 h-6" /></button>}
+              {!generating && !generationError && <button onClick={handleCloseModal} className="absolute top-10 right-10 p-3 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all hover:rotate-90 bg-slate-100 dark:bg-white/5 rounded-2xl"><X className="w-6 h-6" /></button>}
+              {generationError && <button onClick={handleCloseModal} className="absolute top-10 right-10 p-3 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all hover:rotate-90 bg-slate-100 dark:bg-white/5 rounded-2xl"><X className="w-6 h-6" /></button>}
               
               {generating ? (
                 <GeneratingAnimation />
+              ) : generationError ? (
+                <GenerationErrorView onRetry={handleRetryGenerate} onClose={handleCloseModal} />
               ) : (
                 <>
                   <div className="mb-12">

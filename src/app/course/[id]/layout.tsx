@@ -47,7 +47,24 @@ export default async function CourseLayout({
 
   const sortedPhases = phasesData.sort((a,b) => a.order_index - b.order_index);
   const firstPhase = sortedPhases[0];
-  const firstModule = firstPhase?.modules.sort((a,b) => a.order_index - b.order_index)[0];
+  const firstModulePhase1 = firstPhase?.modules.sort((a,b) => a.order_index - b.order_index)[0];
+
+  let initialPhaseId = firstPhase?.id || '';
+  let initialModuleId = firstModulePhase1?.id || '';
+  let foundIncomplete = false;
+
+  for (const phase of sortedPhases) {
+    const sortedModules = phase.modules.sort((a,b) => a.order_index - b.order_index);
+    for (const mod of sortedModules) {
+      if (!mod.is_completed) {
+        initialPhaseId = phase.id;
+        initialModuleId = mod.id;
+        foundIncomplete = true;
+        break;
+      }
+    }
+    if (foundIncomplete) break;
+  }
   
   const unlockedPhases = phasesSnapshot.docs
     .filter(doc => doc.data().is_unlocked)
@@ -57,8 +74,8 @@ export default async function CourseLayout({
     <div className="flex h-screen bg-[#F0F4F8] dark:bg-[#0D0F12] overflow-hidden text-slate-900 dark:text-slate-100 pt-[80px]">
       <StoreInitializer 
         courseId={cId} 
-        activePhaseId={firstPhase?.id || ''} 
-        activeModuleId={firstModule?.id || ''} 
+        activePhaseId={initialPhaseId} 
+        activeModuleId={initialModuleId} 
         unlockedPhases={unlockedPhases} 
       />
       

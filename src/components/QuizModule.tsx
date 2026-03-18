@@ -27,6 +27,7 @@ import {
   onSnapshot 
 } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
+import confetti from 'canvas-confetti';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -80,6 +81,9 @@ export function QuizModule({
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [viewingAttempt, setViewingAttempt] = useState<Attempt | null>(null);
   const [showHistory, setShowHistory] = useState(true);
+
+  const [showUnlockToast, setShowUnlockToast] = useState(false);
+  const [unlockedPhaseTitle, setUnlockedPhaseTitle] = useState('');
 
   // Subscribe to attempts
   useEffect(() => {
@@ -202,8 +206,27 @@ export function QuizModule({
       if (allQuizzesPassed) {
         const nextPhaseDoc = snap.docs.find(d => d.data().order_index === currentIndex + 1);
         if (nextPhaseDoc) {
+          const nextPhaseId = nextPhaseDoc.id;
+          
+          // Unlock visual state
           await updateDoc(nextPhaseDoc.ref, { is_unlocked: true });
-          unlockPhase(nextPhaseDoc.id);
+          unlockPhase(nextPhaseId);
+
+          // Show Toast and Confetti
+          setUnlockedPhaseTitle(nextPhaseDoc.data().title);
+          setShowUnlockToast(true);
+          
+          confetti({
+            particleCount: 150,
+            spread: 70,
+            origin: { y: 0.3 },
+            colors: ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b']
+          });
+
+          // Hide toast after a few seconds
+          setTimeout(() => {
+             setShowUnlockToast(false);
+          }, 4000);
         }
       }
     } catch (error) {
@@ -240,6 +263,20 @@ export function QuizModule({
     const passed = score >= 50;
     return (
       <div className="w-full max-w-3xl mx-auto space-y-8">
+        <AnimatePresence>
+          {showUnlockToast && (
+            <motion.div
+              initial={{ opacity: 0, y: -50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -50 }}
+              className="fixed top-4 left-1/2 -translate-x-1/2 z-50 p-4 rounded-xl bg-linear-to-br from-blue-500 to-purple-600 text-white shadow-lg flex items-center gap-3"
+            >
+              <CheckCircle2 className="w-6 h-6" />
+              <span className="font-semibold">Phase Unlocked: {unlockedPhaseTitle}!</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}

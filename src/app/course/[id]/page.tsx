@@ -2,8 +2,9 @@
 
 import { useCourseStore } from '@/lib/store/useCourseStore';
 import { db } from '@/lib/firebase/client';
-import { doc, collection, query, getDocs, onSnapshot, DocumentData, updateDoc } from 'firebase/firestore';
+import { doc, collection, query, getDocs, onSnapshot, DocumentData, updateDoc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { VideoPlayer } from '@/components/VideoPlayer';
@@ -171,6 +172,16 @@ function CourseProgressView({ courseId }: { courseId: string }) {
   );
 }
 
+const PHASE_GENERATION_STEPS = [
+  "Analyzing new phase syllabus...",
+  "Gathering comprehensive study notes...",
+  "Structuring module contents...",
+  "Generating interactive flashcards...",
+  "Designing presentation slides...",
+  "Curating relevant video content...",
+  "Finalizing phase assets..."
+];
+
 export default function CoursePage() {
   const { activeCourseId, activeModuleId, activePhaseId, setActiveModule, isQuizInProgress } = useCourseStore();
   const [moduleData, setModuleData] = useState<ModuleData | null>(null);
@@ -178,6 +189,16 @@ export default function CoursePage() {
   const [phaseModules, setPhaseModules] = useState<ModuleData[]>([]);
   const [phaseTitle, setPhaseTitle] = useState<string>('');
   const isOnline = useNetworkStatus();
+
+  // Phase Generation state
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [genStep, setGenStep] = useState(0);
+
+  useEffect(() => {
+    if (!isGenerating) return;
+    const interval = setInterval(() => setGenStep((p) => (p + 1) % PHASE_GENERATION_STEPS.length), 3000);
+    return () => clearInterval(interval);
+  }, [isGenerating]);
 
   // Scroll to top only once the new module's content is actually loaded and rendered
   useEffect(() => {
@@ -195,10 +216,31 @@ export default function CoursePage() {
       const mods = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ModuleData[];
       setPhaseModules(mods.sort((a, b) => a.order_index - b.order_index));
 
-      // Fetch phase title
-      const phasesSnap = await getDocs(collection(db, 'courses', activeCourseId, 'phases'));
-      const currentPhase = phasesSnap.docs.find(d => d.id === activePhaseId);
-      if (currentPhase) setPhaseTitle(currentPhase.data().title);
+      // Fetch phase title and check generation status
+      const currentPhaseDoc = await getDoc(doc(db, 'courses', activeCourseId, 'phases', activePhaseId));
+      if (currentPhaseDoc.exists()) {
+        const pData = currentPhaseDoc.data();
+        setPhaseTitle(pData.title);
+
+        if (pData.is_unlocked && pData.is_generated === false) {
+          setIsGenerating(true);
+          try {
+            const res = await fetch('/api/generate-phase-content', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ courseId: activeCourseId, phaseId: activePhaseId }),
+            });
+            const data = await res.json();
+            if (data.success) {
+              // Mark local state as generated so it doesn't refire
+            }
+          } catch (error) {
+            console.error('Failed to generate phase:', error);
+          } finally {
+            setIsGenerating(false);
+          }
+        }
+      }
     };
     fetchPhaseModules();
   }, [activeCourseId, activePhaseId, activeModuleId]);
@@ -229,6 +271,51 @@ export default function CoursePage() {
 
   if (activeModuleId === 'course-progress' && activeCourseId) {
     return <CourseProgressView courseId={activeCourseId} />;
+  }
+
+  if (isGenerating) {
+    return (
+      <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl p-10 max-w-sm w-full text-center"
+        >
+          <div className="w-20 h-20 mx-auto bg-blue-50 dark:bg-blue-500/10 rounded-3xl flex items-center justify-center mb-6 relative">
+            <div className="absolute inset-0 border-4 border-blue-500/30 rounded-3xl animate-ping" />
+            <BrainCircuit className="w-10 h-10 text-blue-500" />
+          </div>
+          
+          <h3 className="text-2xl font-bold dark:text-white mb-3 tracking-tight">Leveling Up!</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
+             You&apos;ve unlocked the next phase. Hang tight while the AI prepares your new lessons...
+          </p>
+
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden mb-4">
+             <motion.div 
+               className="h-full bg-blue-500 rounded-full"
+               initial={{ width: "0%" }}
+               animate={{ width: "100%" }}
+               transition={{ duration: 15, ease: "linear" }}
+             />
+          </div>
+          
+          <div className="h-6">
+            <AnimatePresence mode="wait">
+              <motion.p 
+                key={genStep}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                className="text-xs font-bold uppercase tracking-widest text-blue-500"
+              >
+                {PHASE_GENERATION_STEPS[genStep]}
+              </motion.p>
+            </AnimatePresence>
+          </div>
+        </motion.div>
+      </div>
+    );
   }
 
   if (loading) {
@@ -295,7 +382,13 @@ export default function CoursePage() {
             </div>
             )}
             
-            {moduleData.content && (
+            {!moduleData.content ? (
+              <div className="flex flex-col items-center justify-center p-20 bg-slate-50 dark:bg-[#13151A] rounded-2xl border border-slate-100 dark:border-[#2A2E35] text-center">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
+                <h3 className="text-xl font-bold dark:text-white mb-2">Preparing Your Lessons</h3>
+                <p className="text-slate-500 dark:text-slate-400">The AI is crafting detailed notes for this video. Just a moment...</p>
+              </div>
+            ) : (
               <div className="prose prose-slate dark:prose-invert prose-lg max-w-none prose-headings:bg-linear-to-r prose-headings:from-blue-600 prose-headings:to-indigo-600 prose-headings:bg-clip-text prose-headings:text-transparent prose-a:text-blue-500 hover:prose-a:text-blue-600 p-4 bg-slate-50 dark:bg-[#13151A] rounded-2xl border border-slate-100 dark:border-[#2A2E35]">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {moduleData.content}
@@ -307,9 +400,17 @@ export default function CoursePage() {
 
         {moduleData.type === 'infographics' && (
           <div className="prose prose-slate dark:prose-invert prose-lg max-w-none prose-headings:bg-linear-to-r prose-headings:from-blue-600 prose-headings:to-indigo-600 prose-headings:bg-clip-text prose-headings:text-transparent prose-a:text-blue-500 hover:prose-a:text-blue-600 p-4">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {moduleData.content || "Infographic content is not available."}
-            </ReactMarkdown>
+            {!moduleData.content ? (
+              <div className="flex flex-col items-center justify-center p-20 bg-slate-50 dark:bg-[#13151A] rounded-2xl border border-slate-100 dark:border-[#2A2E35] text-center">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
+                <h3 className="text-xl font-bold dark:text-white mb-2">Generating Infographic</h3>
+                <p className="text-slate-500 dark:text-slate-400">Creating a rich visual study guide for you...</p>
+              </div>
+            ) : (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {moduleData.content}
+              </ReactMarkdown>
+            )}
           </div>
         )}
 
@@ -323,11 +424,31 @@ export default function CoursePage() {
         )}
 
         {moduleData.type === 'flashcard' && (
-          <FlashcardModule cards={moduleData.flashcard_data && moduleData.flashcard_data.length > 0 ? moduleData.flashcard_data : [{ front: 'No flashcards available', back: 'Please regenerate this module.' }]} />
+          <div className="min-h-[400px]">
+            {!moduleData.flashcard_data || moduleData.flashcard_data.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full p-20 bg-slate-50 dark:bg-[#13151A] rounded-2xl border border-slate-100 dark:border-[#2A2E35] text-center">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
+                <h3 className="text-xl font-bold dark:text-white mb-2">Creating Flashcards</h3>
+                <p className="text-slate-500 dark:text-slate-400">Populating your deck with key concepts...</p>
+              </div>
+            ) : (
+              <FlashcardModule cards={moduleData.flashcard_data} />
+            )}
+          </div>
         )}
 
         {moduleData.type === 'slideDeck' && (
-          <SlideDeckModule slides={moduleData.slides && moduleData.slides.length > 0 ? moduleData.slides : [{ title: 'No slides available', body: 'Please regenerate this module.' }]} />
+          <div className="min-h-[400px]">
+             {!moduleData.slides || moduleData.slides.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full p-20 bg-slate-50 dark:bg-[#13151A] rounded-2xl border border-slate-100 dark:border-[#2A2E35] text-center">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
+                <h3 className="text-xl font-bold dark:text-white mb-2">Designing Slides</h3>
+                <p className="text-slate-500 dark:text-slate-400">Crafting a visual narrative for this phase...</p>
+              </div>
+            ) : (
+              <SlideDeckModule slides={moduleData.slides} />
+            )}
+          </div>
         )}
       </div>
 
