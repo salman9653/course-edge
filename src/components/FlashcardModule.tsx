@@ -67,7 +67,7 @@ export function FlashcardModule({ cards }: FlashcardModuleProps) {
 
       {/* Card */}
       <div
-        className="relative w-full h-[400px] cursor-pointer"
+        className="relative w-full h-[320px] md:h-[400px] cursor-pointer"
         style={{ perspective: '1200px' }}
         onClick={handleFlip}
       >
@@ -92,7 +92,7 @@ export function FlashcardModule({ cards }: FlashcardModuleProps) {
               {/* Front */}
               <div
                 className={cn(
-                  'absolute inset-0 rounded-3xl flex flex-col items-center justify-center p-10 text-center shadow-2xl border select-none',
+                  'absolute inset-0 rounded-3xl flex flex-col items-center justify-center p-6 md:p-10 text-center shadow-2xl border select-none',
                   `bg-linear-to-br ${accent.front}`,
                 )}
                 style={{ backfaceVisibility: 'hidden' }}
@@ -100,7 +100,7 @@ export function FlashcardModule({ cards }: FlashcardModuleProps) {
                 <div className="absolute top-5 left-5 text-[10px] font-bold uppercase tracking-widest text-white/40 select-none">
                   Question
                 </div>
-                <p className="text-white text-xl font-semibold leading-relaxed">
+                <p className="text-white text-lg md:text-xl font-semibold leading-relaxed">
                   {current.front}
                 </p>
                 <div className="absolute bottom-5 right-5 flex items-center gap-1.5 text-white/40 text-[11px] font-bold uppercase tracking-widest select-none">
@@ -112,7 +112,7 @@ export function FlashcardModule({ cards }: FlashcardModuleProps) {
               {/* Back */}
               <div
                 className={cn(
-                  'absolute inset-0 rounded-3xl flex flex-col items-center justify-center p-10 text-center shadow-2xl border select-none',
+                  'absolute inset-0 rounded-3xl flex flex-col items-center justify-center p-6 md:p-10 text-center shadow-2xl border select-none',
                   `bg-linear-to-br ${accent.back}`,
                 )}
                 style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
@@ -120,7 +120,7 @@ export function FlashcardModule({ cards }: FlashcardModuleProps) {
                 <div className="absolute top-5 left-5 text-[10px] font-bold uppercase tracking-widest text-white/40 select-none">
                   Answer
                 </div>
-                <p className="text-white text-xl font-semibold leading-relaxed">
+                <p className="text-white text-lg md:text-xl font-semibold leading-relaxed">
                   {current.back}
                 </p>
                 <div className="absolute bottom-5 right-5 flex items-center gap-1.5 text-white/40 text-[11px] font-bold uppercase tracking-widest select-none">

@@ -281,7 +281,7 @@ export function QuizModule({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           className={cn(
-            "p-10 rounded-[2.5rem] border text-center relative overflow-hidden",
+            "p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border text-center relative overflow-hidden",
             passed 
               ? "bg-emerald-50/50 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20" 
               : "bg-red-50/50 dark:bg-red-500/5 border-red-200 dark:border-red-500/20"
@@ -299,7 +299,7 @@ export function QuizModule({
               {passed ? <CheckCircle2 className="w-10 h-10" /> : <XCircle className="w-10 h-10" />}
             </div>
             
-            <h2 className="text-4xl font-heading font-bold mb-2 dark:text-white">
+            <h2 className="text-2xl md:text-4xl font-heading font-bold mb-2 dark:text-white">
               {passed ? 'Quiz Passed!' : 'Requires Review'}
             </h2>
             <p className="text-lg text-slate-600 dark:text-slate-400 mb-8 max-w-md">
@@ -388,7 +388,7 @@ export function QuizModule({
                 <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold dark:text-white">
                   {qIdx + 1}
                 </span>
-                <div className="flex-1 prose prose-slate dark:prose-invert max-w-none prose-pre:bg-slate-900/90 prose-pre:rounded-xl prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-500 dark:prose-code:text-blue-400 prose-code:bg-slate-100 dark:prose-code:bg-slate-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-lg prose-code:before:content-none prose-code:after:content-none prose-pre:prose-code:bg-transparent prose-pre:prose-code:p-0 prose-pre:prose-code:text-blue-300">
+                <div className="flex-1 prose prose-sm md:prose-base prose-slate dark:prose-invert max-w-none prose-pre:bg-slate-900/90 prose-pre:rounded-xl prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-500 dark:prose-code:text-blue-400 prose-code:bg-slate-100 dark:prose-code:bg-slate-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-lg prose-code:before:content-none prose-code:after:content-none prose-pre:prose-code:bg-transparent prose-pre:prose-code:p-0 prose-pre:prose-code:text-blue-300">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {q.question}
                   </ReactMarkdown>
@@ -450,7 +450,7 @@ export function QuizModule({
               ))}
             </div>
           </div>
-          <div className="prose prose-slate dark:prose-invert max-w-none prose-pre:bg-slate-900/90 prose-pre:rounded-2xl prose-pre:border prose-pre:border-slate-800 prose-pre:shadow-2xl prose-code:text-blue-500 dark:prose-code:text-blue-400 prose-code:bg-slate-100 dark:prose-code:bg-slate-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-lg prose-code:before:content-none prose-code:after:content-none prose-pre:prose-code:bg-transparent prose-pre:prose-code:p-0 prose-pre:prose-code:text-blue-300">
+          <div className="prose prose-sm md:prose-base prose-slate dark:prose-invert max-w-none prose-pre:bg-slate-900/90 prose-pre:rounded-2xl prose-pre:border prose-pre:border-slate-800 prose-pre:shadow-2xl prose-code:text-blue-500 dark:prose-code:text-blue-400 prose-code:bg-slate-100 dark:prose-code:bg-slate-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-lg prose-code:before:content-none prose-code:after:content-none prose-pre:prose-code:bg-transparent prose-pre:prose-code:p-0 prose-pre:prose-code:text-blue-300">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {currentQ.question}
             </ReactMarkdown>
@@ -466,7 +466,7 @@ export function QuizModule({
               transition={{ delay: idx * 0.1 }}
               onClick={() => setSelectedAnswer(idx)}
               className={cn(
-                "w-full group relative text-left p-6 rounded-3xl border transition-all duration-300",
+                "w-full group relative text-left p-4 md:p-6 rounded-3xl border transition-all duration-300",
                 selectedAnswer === idx 
                   ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" 
                   : "border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50 dark:hover:bg-blue-900/10"
@@ -482,7 +482,7 @@ export function QuizModule({
                   {String.fromCharCode(65 + idx)}
                 </div>
                 <div className={cn(
-                  "flex-1 prose dark:prose-invert max-w-none prose-p:my-0 transition-colors prose-pre:bg-slate-900/90 prose-pre:rounded-xl prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-500 dark:prose-code:text-blue-400 prose-code:bg-slate-100 dark:prose-code:bg-slate-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-lg prose-code:before:content-none prose-code:after:content-none prose-pre:prose-code:bg-transparent prose-pre:prose-code:p-0 prose-pre:prose-code:text-blue-300",
+                  "flex-1 prose prose-sm md:prose-base dark:prose-invert max-w-none prose-p:my-0 transition-colors prose-pre:bg-slate-900/90 prose-pre:rounded-xl prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-500 dark:prose-code:text-blue-400 prose-code:bg-slate-100 dark:prose-code:bg-slate-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-lg prose-code:before:content-none prose-code:after:content-none prose-pre:prose-code:bg-transparent prose-pre:prose-code:p-0 prose-pre:prose-code:text-blue-300",
                   selectedAnswer === idx ? "prose-slate" : "text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white"
                 )}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -521,7 +521,7 @@ export function QuizModule({
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-12">
-      <div className="bg-white dark:bg-[#1C1F26] p-10 rounded-[2.5rem] border border-slate-200/60 dark:border-white/5 shadow-xl shadow-slate-200/10 dark:shadow-none relative overflow-hidden group">
+      <div className="bg-white dark:bg-[#1C1F26] p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-slate-200/60 dark:border-white/5 shadow-xl shadow-slate-200/10 dark:shadow-none relative overflow-hidden group">
         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-3xl rounded-full translate-x-32 -translate-y-32" />
         
         <div className="flex flex-col md:flex-row items-center gap-10 relative z-10">
@@ -529,7 +529,7 @@ export function QuizModule({
             <BrainCircuit className="w-12 h-12" />
           </div>
           <div className="flex-1 text-center md:text-left">
-            <h2 className="text-3xl font-heading font-bold mb-3 dark:text-white">
+            <h2 className="text-2xl md:text-3xl font-heading font-bold mb-3 dark:text-white">
               Knowledge Check
             </h2>
             <p className="text-slate-500 dark:text-slate-400 text-lg leading-relaxed max-w-xl">

@@ -68,15 +68,15 @@ export function Navbar() {
            )}
            
            {(isLandingPage || isDashboard || isAuthPage) && (
-             <div className="w-[1px] h-6 bg-slate-200 dark:bg-white/10 hidden md:block"></div>
+             <div className="w-px h-6 bg-slate-200 dark:bg-white/10 hidden md:block"></div>
            )}
 
            <ThemeToggle />
 
-           <div className="hidden md:flex items-center gap-4 ml-2">
+           <div className="flex items-center gap-2 md:gap-4 ml-2">
               {isLandingPage && !user && (
                 <>
-                  <Link href={ROUTES.LOGIN} className="text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors uppercase tracking-wider">
+                  <Link href={ROUTES.LOGIN} className="text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors uppercase tracking-wider hidden md:block">
                     Login
                   </Link>
                   <Link href={ROUTES.REGISTER} className="px-6 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full text-sm font-bold hover:opacity-90 transition-all shadow-lg active:scale-95 border border-[#202124]/5">
@@ -98,12 +98,12 @@ export function Navbar() {
                 <div className="relative" ref={menuRef}>
                   <button 
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className="flex items-center gap-3 px-4 py-2 bg-slate-100 dark:bg-white/5 rounded-full border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+                    className="flex items-center gap-0 md:gap-3 p-0 md:px-4 md:py-2 md:bg-slate-100 md:dark:bg-white/5 rounded-full md:border md:border-slate-200 md:dark:border-white/10 md:hover:bg-slate-200 md:dark:hover:bg-white/10 transition-colors"
                   >
                     <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
                       <UserIcon className="w-4 h-4" />
                     </div>
-                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 hidden md:inline">
                       {user.displayName || user.email?.split('@')[0]}
                     </span>
                   </button>

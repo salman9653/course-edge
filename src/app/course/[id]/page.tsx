@@ -2,185 +2,14 @@
 
 import { useCourseStore } from '@/lib/store/useCourseStore';
 import { db } from '@/lib/firebase/client';
-import { doc, collection, query, getDocs, onSnapshot, DocumentData, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, collection, query, getDocs, onSnapshot, updateDoc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { VideoPlayer } from '@/components/VideoPlayer';
-import { FlashcardModule } from '@/components/FlashcardModule';
-import { SlideDeckModule } from '@/components/SlideDeckModule';
-import { Loader2, ArrowRight, BrainCircuit, WifiOff, CheckCircle2, Trophy, Target } from 'lucide-react';
-import { QuizModule } from '@/components/QuizModule';
+import { Loader2, WifiOff } from 'lucide-react';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
-import { cn } from '@/lib/utils';
-
-interface ModuleData extends DocumentData {
-  id: string;
-  title: string;
-  type: 'video' | 'infographics' | 'quiz' | 'flashcard' | 'slideDeck';
-  description: string;
-  order_index: number;
-  content?: string; // infographic markdown
-  youtube_links?: string[];
-  search_query?: string;
-  is_completed?: boolean;
-  quiz_metadata?: {
-    type: 'small' | 'major';
-    question_count: number;
-    context_summary: string;
-  };
-  flashcard_data?: { front: string; back: string }[];
-  slides?: { title: string; body: string }[];
-}
-
-interface PhaseData {
-  id: string;
-  title: string;
-  order_index: number;
-  modules: ModuleData[];
-}
-
-function CourseProgressView({ courseId }: { courseId: string }) {
-  const [loading, setLoading] = useState(true);
-  const [phases, setPhases] = useState<PhaseData[]>([]);
-
-  useEffect(() => {
-    const fetchProgress = async () => {
-      if (!courseId) return;
-      try {
-        const phasesSnap = await getDocs(query(collection(db, 'courses', courseId, 'phases')));
-        const phasesData = await Promise.all(phasesSnap.docs.map(async (pDoc) => {
-          const modsSnap = await getDocs(query(collection(db, 'courses', courseId, 'phases', pDoc.id, 'modules')));
-          const modules = modsSnap.docs.map(m => m.data() as ModuleData);
-          return {
-            id: pDoc.id,
-            title: pDoc.data().title,
-            order_index: pDoc.data().order_index,
-            modules,
-          } as PhaseData;
-        }));
-        setPhases(phasesData.sort((a,b) => a.order_index - b.order_index));
-      } catch (error) {
-        console.error("Failed to fetch course progress", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProgress();
-  }, [courseId]);
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-500">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <p className="animate-pulse">Loading course progress...</p>
-      </div>
-    );
-  }
-
-  const totalModules = phases.reduce((acc, p) => acc + p.modules.length, 0);
-  const completedModules = phases.reduce((acc, p) => acc + p.modules.filter((m: ModuleData) => m.is_completed).length, 0);
-  const progressPercent = totalModules === 0 ? 0 : Math.round((completedModules / totalModules) * 100);
-
-  const smallQuizzesPassed = phases.reduce((acc, p) => acc + p.modules.filter((m: ModuleData) => m.type === 'quiz' && m.quiz_metadata?.type === 'small' && m.is_completed).length, 0);
-  const majorQuizzesPassed = phases.reduce((acc, p) => acc + p.modules.filter((m: ModuleData) => m.type === 'quiz' && (!m.quiz_metadata || m.quiz_metadata?.type === 'major') && m.is_completed).length, 0);
-
-  return (
-    <div className="w-full p-6 pb-32">
-      <div className="mb-12 text-center md:text-left">
-        <h1 className="text-4xl font-heading font-bold bg-linear-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent mb-4">
-          Your Learning Journey
-        </h1>
-        <p className="text-lg text-slate-500 dark:text-slate-400">
-          Track your overall progress and see what&apos;s coming next.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-        <div className="bg-white dark:bg-[#1C1F26] p-6 rounded-3xl border border-slate-200/60 dark:border-white/5 shadow-xl shadow-slate-200/20 dark:shadow-none flex flex-col items-center justify-center text-center">
-          <div className="w-16 h-16 bg-blue-50 dark:bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 mb-4">
-            <Target className="w-8 h-8" />
-          </div>
-          <span className="text-3xl font-heading font-bold dark:text-white mb-1">{progressPercent}%</span>
-          <span className="text-sm font-bold tracking-widest uppercase text-slate-500">Completed</span>
-        </div>
-        <div className="bg-white dark:bg-[#1C1F26] p-6 rounded-3xl border border-slate-200/60 dark:border-white/5 shadow-xl shadow-slate-200/20 dark:shadow-none flex flex-col items-center justify-center text-center">
-          <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500 mb-4">
-            <CheckCircle2 className="w-8 h-8" />
-          </div>
-          <span className="text-3xl font-heading font-bold dark:text-white mb-1">{completedModules} / {totalModules}</span>
-          <span className="text-sm font-bold tracking-widest uppercase text-slate-500">Modules Done</span>
-        </div>
-        <div className="bg-white dark:bg-[#1C1F26] p-6 rounded-3xl border border-slate-200/60 dark:border-white/5 shadow-xl shadow-slate-200/20 dark:shadow-none flex flex-col items-center justify-center text-center">
-          <div className="w-16 h-16 bg-purple-50 dark:bg-purple-500/10 rounded-2xl flex items-center justify-center text-purple-500 mb-4">
-            <Trophy className="w-8 h-8" />
-          </div>
-          <span className="text-3xl font-heading font-bold dark:text-white mb-1">{phases.filter(p => p.modules.every((m: ModuleData) => m.is_completed) && p.modules.length > 0).length}</span>
-          <span className="text-sm font-bold tracking-widest uppercase text-slate-500">Phases Mastered</span>
-        </div>
-        <div className="bg-white dark:bg-[#1C1F26] p-6 rounded-3xl border border-slate-200/60 dark:border-white/5 shadow-xl shadow-slate-200/20 dark:shadow-none flex flex-col items-center justify-center text-center">
-          <div className="w-16 h-16 bg-orange-50 dark:bg-orange-500/10 rounded-2xl flex items-center justify-center text-orange-500 mb-4">
-            <BrainCircuit className="w-8 h-8" />
-          </div>
-          <div className="flex gap-4 items-center">
-            <div className="flex flex-col items-center">
-               <span className="text-2xl font-heading font-bold dark:text-white mb-1">{smallQuizzesPassed}</span>
-               <span className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Small</span>
-            </div>
-            <div className="w-px h-8 bg-slate-200 dark:bg-slate-700" />
-            <div className="flex flex-col items-center">
-               <span className="text-2xl font-heading font-bold dark:text-white mb-1">{majorQuizzesPassed}</span>
-               <span className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Major</span>
-            </div>
-          </div>
-          <span className="text-sm font-bold tracking-widest uppercase text-slate-500 mt-3">Quizzes Passed</span>
-        </div>
-      </div>
-
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold dark:text-white mb-6">Phase Breakdown</h2>
-        {phases.map((phase) => {
-          const pTotal = phase.modules.length;
-          const pCompleted = phase.modules.filter((m: ModuleData) => m.is_completed).length;
-          const pPercent = pTotal === 0 ? 0 : Math.round((pCompleted / pTotal) * 100);
-          const isMastered = pTotal > 0 && pCompleted === pTotal;
-
-          return (
-            <div key={phase.id} className="bg-white dark:bg-[#1C1F26] p-6 rounded-2xl border border-slate-200/60 dark:border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  {isMastered && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
-                  <h3 className={cn("text-lg font-bold", isMastered ? "text-emerald-700 dark:text-emerald-400" : "text-slate-800 dark:text-slate-200")}>{phase.title}</h3>
-                </div>
-                <div className="flex items-center gap-4 text-sm font-medium text-slate-500">
-                  <span>{pCompleted} of {pTotal} modules</span>
-                  <span>{pPercent}% complete</span>
-                </div>
-              </div>
-              <div className="w-full md:w-64 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shrink-0">
-                <div 
-                  className={cn("h-full rounded-full transition-all duration-1000", isMastered ? "bg-emerald-500" : "bg-blue-500")}
-                  style={{ width: `${pPercent}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-const PHASE_GENERATION_STEPS = [
-  "Analyzing new phase syllabus...",
-  "Gathering comprehensive study notes...",
-  "Structuring module contents...",
-  "Generating interactive flashcards...",
-  "Designing presentation slides...",
-  "Curating relevant video content...",
-  "Finalizing phase assets..."
-];
+import { CourseProgressView, ModuleData } from '@/components/course/CourseProgressView';
+import { PhaseGenerationLoading, PHASE_GENERATION_STEPS } from '@/components/course/PhaseGenerationLoading';
+import { ModuleContent } from '@/components/course/ModuleContent';
+import { ModuleNavigation } from '@/components/course/ModuleNavigation';
 
 export default function CoursePage() {
   const { activeCourseId, activeModuleId, activePhaseId, setActiveModule, isQuizInProgress } = useCourseStore();
@@ -274,48 +103,7 @@ export default function CoursePage() {
   }
 
   if (isGenerating) {
-    return (
-      <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl p-10 max-w-sm w-full text-center"
-        >
-          <div className="w-20 h-20 mx-auto bg-blue-50 dark:bg-blue-500/10 rounded-3xl flex items-center justify-center mb-6 relative">
-            <div className="absolute inset-0 border-4 border-blue-500/30 rounded-3xl animate-ping" />
-            <BrainCircuit className="w-10 h-10 text-blue-500" />
-          </div>
-          
-          <h3 className="text-2xl font-bold dark:text-white mb-3 tracking-tight">Leveling Up!</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
-             You&apos;ve unlocked the next phase. Hang tight while the AI prepares your new lessons...
-          </p>
-
-          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden mb-4">
-             <motion.div 
-               className="h-full bg-blue-500 rounded-full"
-               initial={{ width: "0%" }}
-               animate={{ width: "100%" }}
-               transition={{ duration: 15, ease: "linear" }}
-             />
-          </div>
-          
-          <div className="h-6">
-            <AnimatePresence mode="wait">
-              <motion.p 
-                key={genStep}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                className="text-xs font-bold uppercase tracking-widest text-blue-500"
-              >
-                {PHASE_GENERATION_STEPS[genStep]}
-              </motion.p>
-            </AnimatePresence>
-          </div>
-        </motion.div>
-      </div>
-    );
+    return <PhaseGenerationLoading isGenerating={isGenerating} genStep={genStep} />;
   }
 
   if (loading) {
@@ -354,7 +142,7 @@ export default function CoursePage() {
   const isAnyModulePending = isOtherModulesPending || !moduleData.is_completed;
 
   return (
-    <div className="w-full p-6 pb-32">
+    <div className="w-full p-4 md:p-6 pb-32">
       {!isOnline && (
         <div className="mb-6 p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-600 dark:text-orange-400 flex items-center gap-3 shadow-sm backdrop-blur-md">
           <WifiOff className="w-5 h-5 shrink-0" />
@@ -362,126 +150,26 @@ export default function CoursePage() {
         </div>
       )}
 
-      <div className="mb-8">
-        <h1 className="text-3xl font-heading font-bold bg-linear-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent mb-6 text-center">
-          {moduleData.type === 'quiz' && moduleData.quiz_metadata?.type === 'major' 
-            ? `Major Quiz: ${phaseTitle.split(':')[0]}` 
-            : moduleData.title}
-        </h1>
-        
-        {moduleData.type === 'video' && (
-          <div className="flex flex-col gap-6">
-            {isOnline ? (
-              <VideoPlayer videoIds={moduleData.youtube_links && moduleData.youtube_links.length > 0 ? [moduleData.youtube_links[0]] : []} />
-            ) : (
-            <div className="w-full aspect-video bg-slate-900/50 backdrop-blur-md rounded-2xl flex items-center justify-center text-slate-400 border border-slate-800 border-dashed">
-              <div className="flex flex-col items-center">
-                <WifiOff className="w-8 h-8 mb-2 opacity-50" />
-                <span>Video player unavailable offline</span>
-              </div>
-            </div>
-            )}
-            
-            {!moduleData.content ? (
-              <div className="flex flex-col items-center justify-center p-20 bg-slate-50 dark:bg-[#13151A] rounded-2xl border border-slate-100 dark:border-[#2A2E35] text-center">
-                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
-                <h3 className="text-xl font-bold dark:text-white mb-2">Preparing Your Lessons</h3>
-                <p className="text-slate-500 dark:text-slate-400">The AI is crafting detailed notes for this video. Just a moment...</p>
-              </div>
-            ) : (
-              <div className="prose prose-slate dark:prose-invert prose-lg max-w-none prose-headings:bg-linear-to-r prose-headings:from-blue-600 prose-headings:to-indigo-600 prose-headings:bg-clip-text prose-headings:text-transparent prose-a:text-blue-500 hover:prose-a:text-blue-600 p-4 bg-slate-50 dark:bg-[#13151A] rounded-2xl border border-slate-100 dark:border-[#2A2E35]">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {moduleData.content}
-                </ReactMarkdown>
-              </div>
-            )}
-          </div>
-        )}
+      <ModuleContent 
+        moduleData={moduleData}
+        isOnline={isOnline}
+        activeCourseId={activeCourseId || ''}
+        activePhaseId={activePhaseId || ''}
+        activeModuleId={activeModuleId || ''}
+        nextModuleId={nextModuleId}
+        setActiveModule={setActiveModule}
+        phaseTitle={phaseTitle}
+      />
 
-        {moduleData.type === 'infographics' && (
-          <div className="prose prose-slate dark:prose-invert prose-lg max-w-none prose-headings:bg-linear-to-r prose-headings:from-blue-600 prose-headings:to-indigo-600 prose-headings:bg-clip-text prose-headings:text-transparent prose-a:text-blue-500 hover:prose-a:text-blue-600 p-4">
-            {!moduleData.content ? (
-              <div className="flex flex-col items-center justify-center p-20 bg-slate-50 dark:bg-[#13151A] rounded-2xl border border-slate-100 dark:border-[#2A2E35] text-center">
-                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
-                <h3 className="text-xl font-bold dark:text-white mb-2">Generating Infographic</h3>
-                <p className="text-slate-500 dark:text-slate-400">Creating a rich visual study guide for you...</p>
-              </div>
-            ) : (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {moduleData.content}
-              </ReactMarkdown>
-            )}
-          </div>
-        )}
-
-        {moduleData.type === 'quiz' && (
-          <QuizModule 
-            courseId={activeCourseId || ''} 
-            phaseId={activePhaseId || ''} 
-            moduleId={activeModuleId || ''} 
-            onNextModule={nextModuleId ? () => setActiveModule(activePhaseId || '', nextModuleId) : undefined}
-          />
-        )}
-
-        {moduleData.type === 'flashcard' && (
-          <div className="min-h-[400px]">
-            {!moduleData.flashcard_data || moduleData.flashcard_data.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full p-20 bg-slate-50 dark:bg-[#13151A] rounded-2xl border border-slate-100 dark:border-[#2A2E35] text-center">
-                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
-                <h3 className="text-xl font-bold dark:text-white mb-2">Creating Flashcards</h3>
-                <p className="text-slate-500 dark:text-slate-400">Populating your deck with key concepts...</p>
-              </div>
-            ) : (
-              <FlashcardModule cards={moduleData.flashcard_data} />
-            )}
-          </div>
-        )}
-
-        {moduleData.type === 'slideDeck' && (
-          <div className="min-h-[400px]">
-             {!moduleData.slides || moduleData.slides.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full p-20 bg-slate-50 dark:bg-[#13151A] rounded-2xl border border-slate-100 dark:border-[#2A2E35] text-center">
-                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
-                <h3 className="text-xl font-bold dark:text-white mb-2">Designing Slides</h3>
-                <p className="text-slate-500 dark:text-slate-400">Crafting a visual narrative for this phase...</p>
-              </div>
-            ) : (
-              <SlideDeckModule slides={moduleData.slides} />
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-col items-end gap-6 mt-12">
-        {moduleData.type !== 'quiz' && (
-          <button 
-            onClick={handleCompleteAndNext}
-            className="flex items-center gap-2 px-8 py-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-2xl font-semibold shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 transition-all hover:scale-105 border border-slate-200 dark:border-slate-700 disabled:opacity-50"
-            disabled={!nextModuleId && isLastModule}
-          >
-            {moduleData.is_completed ? 'Next Module' : 'Complete & Continue'}
-            <ArrowRight className="w-5 h-5 ml-2" />
-          </button>
-        )}
-      </div>
-
-      {isLastModule && isAnyModulePending && !isQuizInProgress && (
-        <div className={cn(
-          "w-full mt-12 mb-20 p-6 rounded-3xl border text-center transition-colors duration-500",
-          isOtherModulesPending 
-            ? "bg-amber-50 dark:bg-amber-500/5 border-amber-200 dark:border-amber-500/20" 
-            : "bg-emerald-50 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20"
-        )}>
-          <p className={cn(
-            "font-bold text-lg",
-            isOtherModulesPending ? "text-amber-800 dark:text-amber-400" : "text-emerald-800 dark:text-emerald-400"
-          )}>
-            {isOtherModulesPending 
-              ? "Modules Pending: Complete every module and pass all quizzes to unlock the next phase!"
-              : "Ready to Advance: Complete this major quiz to unlock the next phase!"}
-          </p>
-        </div>
-      )}
+      <ModuleNavigation 
+        moduleData={moduleData}
+        isLastModule={isLastModule}
+        nextModuleId={nextModuleId}
+        handleCompleteAndNext={handleCompleteAndNext}
+        isAnyModulePending={isAnyModulePending}
+        isOtherModulesPending={isOtherModulesPending}
+        isQuizInProgress={isQuizInProgress}
+      />
     </div>
   );
 }

@@ -68,7 +68,7 @@ export function SlideDeckModule({ slides }: SlideDeckModuleProps) {
       </div>
 
       {/* Slide */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-white/8 bg-white dark:bg-[#1C1F26] shadow-xl shadow-slate-200/30 dark:shadow-none min-h-[440px]">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-white/8 bg-white dark:bg-[#1C1F26] shadow-xl shadow-slate-200/30 dark:shadow-none min-h-[380px] md:min-h-[440px]">
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
             key={currentIndex}
@@ -82,7 +82,7 @@ export function SlideDeckModule({ slides }: SlideDeckModuleProps) {
             animate="center"
             exit="exit"
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-            className="flex flex-col md:flex-row w-full min-h-[440px]"
+            className="flex flex-col md:flex-row w-full min-h-[380px] md:min-h-[440px]"
           >
             {/* Left accent strip */}
             <div className={cn(
@@ -91,7 +91,7 @@ export function SlideDeckModule({ slides }: SlideDeckModuleProps) {
             )} />
 
             {/* Content */}
-            <div className="flex flex-col gap-6 p-8 md:p-10 flex-1">
+            <div className="flex flex-col gap-6 p-6 md:p-10 flex-1">
               {/* Slide number badge */}
               <div className={cn('inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest', accent.badge)}>
                 Slide {currentIndex + 1}
@@ -99,14 +99,14 @@ export function SlideDeckModule({ slides }: SlideDeckModuleProps) {
 
               {/* Title */}
               <h2 className={cn(
-                'text-2xl md:text-3xl font-heading font-bold bg-linear-to-r bg-clip-text text-transparent leading-tight',
+                'text-xl md:text-3xl font-heading font-bold bg-linear-to-r bg-clip-text text-transparent leading-tight',
                 accent.from, accent.to
               )}>
                 {current.title}
               </h2>
 
               {/* Body */}
-              <p className="text-slate-600 dark:text-slate-300 text-base md:text-lg leading-relaxed font-medium flex-1">
+              <p className="text-slate-600 dark:text-slate-300 text-sm md:text-lg leading-relaxed font-medium flex-1">
                 {current.body}
               </p>
             </div>

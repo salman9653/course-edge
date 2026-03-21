@@ -1,5 +1,7 @@
 import { Sidebar, Phase, Module } from '@/components/Sidebar';
 import { StoreInitializer } from '@/components/StoreInitializer';
+import { MobileCourseHeader } from '@/components/MobileCourseHeader';
+import { MobilePhaseIndicator } from '@/components/MobilePhaseIndicator';
 import { adminDb } from '@/lib/firebase/admin';
 import { notFound } from 'next/navigation';
 import { FIREBASE_COLLECTIONS } from '@/lib/constants';
@@ -70,25 +72,32 @@ export default async function CourseLayout({
     .filter(doc => doc.data().is_unlocked)
     .map(doc => doc.id);
 
+  const courseTitle = courseDoc.data()?.title || 'Course';
+
   return (
-    <div className="flex h-screen bg-[#F0F4F8] dark:bg-[#0D0F12] overflow-hidden text-slate-900 dark:text-slate-100 pt-[80px]">
+    <div className="flex flex-col md:flex-row h-screen bg-[#F0F4F8] dark:bg-[#0D0F12] overflow-hidden text-slate-900 dark:text-slate-100 pt-[80px]">
       <StoreInitializer 
         courseId={cId} 
         activePhaseId={initialPhaseId} 
         activeModuleId={initialModuleId} 
         unlockedPhases={unlockedPhases} 
       />
+
+      {/* Mobile-only: Course header bar with back, title, hamburger */}
+      <MobileCourseHeader courseTitle={courseTitle} phases={phasesData} />
       
-      <div className="flex flex-1 w-full max-w-[1600px] mx-auto p-4 gap-4 h-full overflow-hidden">
-        {/* Sidebar Card */}
-        <div className="w-[320px] h-full bg-white dark:bg-[#1A1D24] rounded-2xl border border-slate-200/60 dark:border-[#2A2E35] overflow-hidden shrink-0 shadow-xs flex flex-col">
-          <Sidebar phases={phasesData} courseTitle={courseDoc.data()?.title} />
+      <div className="flex flex-col md:flex-row flex-1 w-full max-w-[1600px] mx-auto md:p-4 md:gap-4 h-full overflow-hidden">
+        {/* Desktop Sidebar Card – hidden on mobile */}
+        <div className="hidden md:flex w-[320px] h-full bg-white dark:bg-[#1A1D24] rounded-2xl border border-slate-200/60 dark:border-[#2A2E35] overflow-hidden shrink-0 shadow-xs flex-col">
+          <Sidebar phases={phasesData} courseTitle={courseTitle} />
         </div>
 
         {/* Main Content Card */}
-        <main className="flex-1 h-full bg-white dark:bg-[#1A1D24] rounded-2xl border border-slate-200/60 dark:border-[#2A2E35] overflow-hidden relative shadow-xs flex flex-col">
+        <main className="flex-1 h-full bg-white md:bg-white dark:bg-[#1A1D24] md:rounded-2xl md:border md:border-slate-200/60 md:dark:border-[#2A2E35] overflow-hidden relative md:shadow-xs flex flex-col">
           <div className="absolute inset-0 z-0 bg-linear-to-br from-blue-50/30 via-transparent to-purple-50/30 dark:from-blue-900/10 dark:via-transparent dark:to-purple-900/10 pointer-events-none" />
           <div id="course-scroll-container" className="relative z-10 w-full h-full overflow-y-auto">
+            {/* Mobile-only: Phase & Module indicator */}
+            <MobilePhaseIndicator phases={phasesData} />
             {children}
           </div>
         </main>

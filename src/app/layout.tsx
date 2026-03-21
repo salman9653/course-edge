@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Outfit } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/landing/Navbar";
+import { MobileBottomNav } from "@/components/navigation/MobileBottomNav";
 import { APP_NAME, APP_DESCRIPTION } from "@/lib/constants";
 import "./globals.css";
 
@@ -39,6 +40,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Navbar />
+          <MobileBottomNav />
           <main className="relative min-h-screen">
             {children}
           </main>
